@@ -1,85 +1,42 @@
+'use client';
 import { useState, useEffect } from 'react';
 
 export const useWallet = () => {
-  const [account, setAccount] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
+  const [account, setAccount] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const checkConnection = async () => {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          setIsConnected(true);
-        }
-      } catch (error) {
-        console.error('Error checking wallet connection:', error);
-      }
+  const checkIfWalletIsConnected = async () => {
+    if (typeof window.ethereum === 'undefined') {
+      console.log("MetaMask is not installed.");
+      return;
+    }
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if (accounts.length > 0) {
+      setAccount(accounts[0]);
     }
   };
 
   const connectWallet = async () => {
-    if (typeof window === 'undefined' || !window.ethereum) {
-      alert('MetaMask is required to use this app');
+    if (typeof window.ethereum === 'undefined') {
+      alert("Please install MetaMask to use this app.");
       return;
     }
-
     try {
       setIsLoading(true);
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-
-      if (accounts.length > 0) {
-        setAccount(accounts[0]);
-        setIsConnected(true);
-      }
+      setAccount(accounts[0]);
+      setIsLoading(false);
     } catch (error) {
-      console.error('Error connecting wallet:', error);
-      alert('Failed to connect wallet');
-    } finally {
+      console.error("Error connecting to MetaMask:", error);
+      alert("Failed to connect wallet. Please try again.");
       setIsLoading(false);
     }
   };
 
-  const disconnectWallet = () => {
-    setAccount('');
-    setIsConnected(false);
-  };
-
   useEffect(() => {
-    checkConnection();
-
-    if (window.ethereum) {
-      const handleAccountsChanged = (accounts) => {
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          setIsConnected(true);
-        } else {
-          disconnectWallet();
-        }
-      };
-
-      const handleChainChanged = () => {
-        window.location.reload();
-      };
-
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
-
-      return () => {
-        if (window.ethereum.removeListener) {
-          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-          window.ethereum.removeListener('chainChanged', handleChainChanged);
-        }
-      };
-    }
+    checkIfWalletIsConnected();
   }, []);
 
-  return {
-    account,
-    isConnected,
-    isLoading,
-    connectWallet,
-    disconnectWallet
-  };
+  return { account, isLoading, connectWallet };
 };
+

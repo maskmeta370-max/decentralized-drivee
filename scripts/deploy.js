@@ -1,16 +1,40 @@
 async function main() {
-  // Get the contract factory
-  const FileManager = await hre.ethers.getContractFactory("FileManager");
+  try {
+    // Get the contract factory
+    const FileManager = await hre.ethers.getContractFactory("FileManager");
 
-  // Start the deployment
-  console.log("Deploying FileManager contract...");
-  const fileManager = await FileManager.deploy();
+    // Start the deployment with explicit gas settings
+    console.log("Deploying FileManager contract...");
+    const deploymentOptions = {
+      gasLimit: 1000000, // Even lower gas limit
+      gasPrice: 25000000000 // 25 gwei, even lower
+    };
 
-  // Wait for the deployment to be confirmed
-  await fileManager.waitForDeployment();
+    console.log("Deployment options:", deploymentOptions);
+    const fileManager = await FileManager.deploy(deploymentOptions);
 
-  // Print the contract address
-  console.log(`FileManager contract deployed to: ${fileManager.target}`);
+    // Wait for the deployment to be confirmed
+    console.log("Waiting for deployment confirmation...");
+    await fileManager.waitForDeployment();
+
+    // Print the contract address
+    console.log(`FileManager contract deployed to: ${fileManager.target}`);
+
+    // Return the contract address for use in the frontend
+    console.log("Add this address to your .env.local file as NEXT_PUBLIC_CONTRACT_ADDRESS");
+  } catch (error) {
+    console.error("Deployment failed:", error.message);
+
+    if (error.message.includes("insufficient funds")) {
+      console.log("\n===== INSUFFICIENT FUNDS ERROR =====");
+      console.log("You need more testnet MATIC tokens to deploy this contract.");
+      console.log("Get free Amoy testnet MATIC from: https://faucet.polygon.technology/");
+      console.log("Enter your wallet address and select 'Amoy' network.");
+      console.log("==============================\n");
+    }
+
+    throw error;
+  }
 }
 
 // Run the deployment and handle errors

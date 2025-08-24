@@ -2,31 +2,25 @@
 pragma solidity ^0.8.9;
 
 contract FileManager {
-    struct File {
-        uint id;
-        string fileName;
-        string fileCid;
-        address owner;
+    // Mapping from user address to their files (CIDs)
+    mapping(address => string[]) private userFiles;
+
+    /**
+     * @dev Add a file to the user's collection
+     * @param _fileName The name of the file (not stored on-chain)
+     * @param _fileCid The IPFS Content Identifier of the file
+     */
+    function addFile(string memory _fileName, string memory _fileCid) public {
+        // We don't actually store the file name on-chain, just the CID
+        // The file name is used in the frontend
+        userFiles[msg.sender].push(_fileCid);
     }
 
-    mapping(address => File[]) private userFiles;
-    uint nextFileId = 1;
-
-    function addFile(string memory _fileName, string memory _fileCid) external {
-        userFiles[msg.sender].push(
-            File(nextFileId, _fileName, _fileCid, msg.sender)
-        );
-        nextFileId++;
-    }
-
-    function getMyFiles() external view returns (string[] memory) {
-        File[] memory files = userFiles[msg.sender];
-        string[] memory cids = new string[](files.length);
-
-        for (uint i = 0; i < files.length; i++) {
-            cids[i] = files[i].fileCid;
-        }
-
-        return cids;
+    /**
+     * @dev Get all files owned by the caller
+     * @return An array of file CIDs
+     */
+    function getMyFiles() public view returns (string[] memory) {
+        return userFiles[msg.sender];
     }
 }
