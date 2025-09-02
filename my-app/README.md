@@ -1,37 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Decentralized Cloud Storage Platform
+This project is a decentralized cloud storage platform that provides a secure and resilient alternative to traditional centralized services. It leverages blockchain technology and peer-to-peer networks to empower users with full ownership and control over their data.
 
-## Getting Started
+Key Features
+Client-Side Encryption: All files are encrypted in the browser before being uploaded, ensuring that only the user with the secret key can view them.
 
-First, run the development server:
+Content Hashing: We use IPFS (InterPlanetary File System) which generates a unique content-based hash (CID) for every file, ensuring data integrity.
 
-```bash
+Access Control: A blockchain-based system allows users to grant and revoke access to their files for other users securely.
+
+Version Control: The platform automatically tracks file changes over time, allowing users to access or revert to previous versions.
+
+Incentive Layer (Conceptual): The architecture is designed to support a future cryptocurrency-based incentive layer to reward users who contribute storage to the network.
+
+User Dashboard: A comprehensive dashboard provides users with an overview of their files, storage analytics, and upload/download history.
+
+Getting Started
+Prerequisites
+Node.js and npm
+
+MetaMask browser extension
+
+A Pinata account for IPFS pinning
+
+Installation
+Clone the repository:
+
+git clone <repository-url>
+cd decentralized-drive
+
+Install dependencies for the backend (Hardhat):
+
+npm install
+
+Install dependencies for the frontend (Next.js):
+
+cd my-app
+npm install
+
+Set up environment variables:
+Create a .env.local file in the my-app directory and add your Pinata API keys:
+
+NEXT_PUBLIC_PINATA_API_KEY=your_api_key
+NEXT_PUBLIC_PINATA_SECRET_API_KEY=your_secret_api_key
+
+Running the Application
+Deploy the Smart Contract:
+
+Compile the contract: npx hardhat compile
+
+Run a local node: npx hardhat node
+
+Deploy to the local node: npx hardhat run scripts/deploy.js --network localhost
+
+Note: Take the deployed contract address and update it in my-app/app/page.js.
+
+Start the frontend:
+
+cd my-app
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open your browser to http://localhost:3000 and connect your MetaMask wallet (configured for the localhost network).

@@ -6,7 +6,7 @@ require('dotenv').config({ path: './my-app/.env.local' });
 const { NEXT_PUBLIC_AMOY_RPC_URL, PRIVATE_KEY } = process.env;
 
 module.exports = {
-  solidity: "0.8.9",
+  solidity: "0.8.24",
   networks: {
     // This section defines the 'amoy' network
     amoy: {

@@ -6,8 +6,8 @@ async function main() {
     // Start the deployment with explicit gas settings
     console.log("Deploying FileManager contract...");
     const deploymentOptions = {
-      gasLimit: 1000000, // Even lower gas limit
-      gasPrice: 25000000000 // 25 gwei, even lower
+      gasLimit: 5000000, // Increased gas limit for complex contract
+      gasPrice: 25000000000 // 25 gwei
     };
 
     console.log("Deployment options:", deploymentOptions);

@@ -1,30 +1,86 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { ethers, BrowserProvider } from 'ethers';
+import FileManagerABI from '../contracts/FileManager.json';
+
+const CONTRACT_ADDRESS = '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
 
 export const useWallet = () => {
   const [account, setAccount] = useState(null);
+  const [contract, setContract] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const isMetaMaskInstalled = typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
+
+  const initializeContract = async (provider) => {
+    try {
+      const signer = await provider.getSigner();
+      const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, FileManagerABI.abi, signer);
+      setContract(contractInstance);
+    } catch (error) {
+      console.error('Error initializing contract:', error);
+    }
+  };
+
   const checkIfWalletIsConnected = async () => {
-    if (typeof window.ethereum === 'undefined') {
+    if (!isMetaMaskInstalled) {
       console.log("MetaMask is not installed.");
       return;
     }
-    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-    if (accounts.length > 0) {
-      setAccount(accounts[0]);
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accounts.length > 0) {
+        setAccount(accounts[0]);
+        const provider = new BrowserProvider(window.ethereum);
+        await initializeContract(provider);
+      }
+    } catch (error) {
+      console.error('Error checking wallet connection:', error);
+    }
+  };
+
+  const switchToLocalNetwork = async () => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x7A69' }], // 31337 in hex (Hardhat default)
+      });
+    } catch (switchError) {
+      // This error code indicates that the chain has not been added to MetaMask
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0x7A69',
+              chainName: 'Hardhat Local',
+              rpcUrls: ['http://localhost:8545'],
+              nativeCurrency: {
+                name: 'ETH',
+                symbol: 'ETH',
+                decimals: 18
+              }
+            }]
+          });
+        } catch (addError) {
+          console.error('Failed to add network:', addError);
+        }
+      }
     }
   };
 
   const connectWallet = async () => {
-    if (typeof window.ethereum === 'undefined') {
+    if (!isMetaMaskInstalled) {
       alert("Please install MetaMask to use this app.");
       return;
     }
     try {
       setIsLoading(true);
+      await switchToLocalNetwork();
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       setAccount(accounts[0]);
+      const provider = new BrowserProvider(window.ethereum);
+      await initializeContract(provider);
       setIsLoading(false);
     } catch (error) {
       console.error("Error connecting to MetaMask:", error);
@@ -33,10 +89,22 @@ export const useWallet = () => {
     }
   };
 
+  const disconnectWallet = () => {
+    setAccount(null);
+    setContract(null);
+  };
+
   useEffect(() => {
     checkIfWalletIsConnected();
   }, []);
 
-  return { account, isLoading, connectWallet };
+  return { 
+    account, 
+    contract, 
+    isLoading, 
+    connectWallet, 
+    disconnectWallet, 
+    isMetaMaskInstalled 
+  };
 };
 
