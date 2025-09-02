@@ -1,292 +1,247 @@
 "use client";
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import CryptoJS from 'crypto-js';
-import { downloadWithIntegrityCheck, performIntegrityCheck, displayIntegrityResults } from '../utils/fileIntegrity';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../hooks/useWallet';
+import Globe3D from '../components/Globe3D';
 
-// Components
-import Sidebar from '../components/Sidebar';
-import FileCrystal from '../components/FileCrystal';
-import Dashboard from '../components/Dashboard';
-import FileSharing from '../components/FileSharing';
-import FileVersions from '../components/FileVersions';
-import SharedFiles from '../components/SharedFiles';
 
-export default function Home() {
+
+// Feature Card Component
+const FeatureCard = ({ icon, title, description, delay = 0 }) => {
+  return (
+    <div 
+      className="bg-gradient-to-br from-space-indigo/80 to-purple-900/50 backdrop-blur-sm border border-electric-cyan/20 rounded-xl p-6 hover:border-electric-cyan/40 transition-all duration-300 hover:transform hover:scale-105 hover:shadow-lg hover:shadow-electric-cyan/20"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="text-electric-cyan text-3xl mb-4">{icon}</div>
+      <h3 className="text-xl font-semibold text-light-silver mb-3">{title}</h3>
+      <p className="text-light-silver/80 leading-relaxed">{description}</p>
+    </div>
+  );
+};
+
+// Floating Particles Background
+const FloatingParticles = () => {
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none">
+      {[...Array(50)].map((_, i) => {
+        // Generate consistent values for each particle
+        const seed = i * 789.123; // Use index as seed for consistency
+        const left = ((seed * 9301 + 49297) % 233280) / 2332.8; // Pseudo-random but consistent
+        const top = ((seed * 9301 + 49297 + 1000) % 233280) / 2332.8;
+        const delay = ((seed * 9301 + 49297 + 2000) % 10000) / 1000;
+        const duration = 10 + ((seed * 9301 + 49297 + 3000) % 20000) / 1000;
+        
+        return (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-electric-cyan/30 rounded-full animate-float"
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+              animationDelay: `${delay}s`,
+              animationDuration: `${duration}s`
+            }}
+          ></div>
+        );
+      })}
+    </div>
+  );
+};
+
+export default function LandingPage() {
   const router = useRouter();
-  const { account, connectWallet, contract, disconnectWallet } = useWallet();
-  const [files, setFiles] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [encryptionKey, setEncryptionKey] = useState('');
-  const [isClient, setIsClient] = useState(false); // State to handle hydration
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [selectedFileForSharing, setSelectedFileForSharing] = useState(null);
-  const [showVersionsModal, setShowVersionsModal] = useState(false);
-  const [selectedFileForVersions, setSelectedFileForVersions] = useState(null);
-  const [activeTab, setActiveTab] = useState('myFiles'); // 'myFiles' or 'sharedFiles'
+  const { account, connectWallet } = useWallet();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
-  // This effect runs only once on the client after the component mounts
   useEffect(() => {
+    // Set client-side flag to prevent hydration mismatch
     setIsClient(true);
-  }, []);
-
-
-
-
-
-  useEffect(() => {
-    const loadFiles = async () => {
-      if (contract && account) {
-        try {
-          const fileCount = await contract.getUserFileCount(account);
-          const loadedFiles = [];
-          
-          for (let i = 0; i < fileCount; i++) {
-            try {
-              const [fileName, fileType, cid, timestamp] = await contract.getFile(account, i);
-              loadedFiles.push({
-                id: i,
-                name: fileName,
-                type: fileType,
-                cid: cid,
-                size: 'Unknown',
-                uploadDate: new Date(Number(timestamp) * 1000).toLocaleDateString()
-              });
-            } catch (fileError) {
-              console.error(`Error loading file ${i}:`, fileError);
-            }
-          }
-          
-          setFiles(loadedFiles);
-        } catch (error) {
-          console.error('Could not fetch files.', error);
-          if (error.code === 'BAD_DATA' && error.value === '0x') {
-            console.log('Contract returned empty data. Please ensure:');
-            console.log('1. MetaMask is connected to localhost:8545');
-            console.log('2. You are using the correct account');
-            console.log('3. The contract is deployed and accessible');
-          }
-        }
-      }
-    };
-
+    
     if (account) {
-      loadFiles();
+      router.push('/dashboard');
     }
-  }, [contract, account]);
+  }, [account, router]);
 
-
-  const handleFileChange = (e) => {
-    setSelectedFile(e.target.files[0]);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile || !encryptionKey) {
-      alert("Please select a file and enter an encryption key.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      try {
-        const fileContent = reader.result;
-        const encrypted = CryptoJS.AES.encrypt(fileContent, encryptionKey).toString();
-
-        const blob = new Blob([encrypted], { type: 'text/plain' });
-        const formData = new FormData();
-        formData.append('file', blob, selectedFile.name);
-
-        const res = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
-          headers: {
-            'pinata_api_key': process.env.NEXT_PUBLIC_PINATA_API_KEY,
-            'pinata_secret_api_key': process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY,
-          },
-        });
-
-        const cid = res.data.IpfsHash;
-        const tx = await contract.addFile(selectedFile.name, selectedFile.type, cid);
-        await tx.wait();
-        alert('File uploaded successfully!');
-        // Reload files after upload
-        const fileCount = await contract.getUserFileCount(account);
-        const loadedFiles = [];
-        
-        for (let i = 0; i < fileCount; i++) {
-          try {
-            const [fileName, fileType, cid, timestamp] = await contract.getFile(account, i);
-            loadedFiles.push({
-              id: i,
-              name: fileName,
-              type: fileType,
-              cid: cid,
-              size: 'Unknown',
-              uploadDate: new Date(Number(timestamp) * 1000).toLocaleDateString()
-            });
-          } catch (fileError) {
-            console.error(`Error loading file ${i}:`, fileError);
-          }
-        }
-        
-        setFiles(loadedFiles);
-
-      } catch (error) {
-        console.error('Error uploading file:', error);
-        alert('File upload failed.');
-      }
-    };
-    reader.readAsDataURL(selectedFile);
-  };
-
-  const handleShareFile = (file) => {
-    setSelectedFileForSharing(file);
-    setShowShareModal(true);
-  };
-
-  const closeShareModal = () => {
-    setShowShareModal(false);
-    setSelectedFileForSharing(null);
-  };
-
-  const handleViewVersions = (file) => {
-    setSelectedFileForVersions(file);
-    setShowVersionsModal(true);
-  };
-
-  const closeVersionsModal = () => {
-    setShowVersionsModal(false);
-    setSelectedFileForVersions(null);
-  };
-
-  const handleDownload = async (file) => {
-    if (!encryptionKey) {
-        alert("Please enter the encryption key to download and decrypt the file.");
-        return;
-    }
+  const handleEnterVault = async () => {
+    setIsLoading(true);
     try {
-        // Use the enhanced download function with integrity checking
-        const success = await downloadWithIntegrityCheck(file.cid, file.name, encryptionKey, {
-          fileName: file.name,
-          cid: file.cid
-        });
-        
-        if (success) {
-          alert('File downloaded successfully with integrity verification!');
-        }
-    } catch(error) {
-        console.error("Error downloading or decrypting file:", error);
-        alert("Failed to download or decrypt. Is the key correct?");
+      await connectWallet();
+    } catch (error) {
+      console.error('Failed to connect wallet:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  // FIX: Render a loading state or null on the server to prevent hydration mismatch
-  if (!isClient) {
-    return null;
-  }
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
-      <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">My Drive</h1>
-          <div className="flex items-center space-x-4">
-            <span className="text-white">
-              {account ? `${account.substring(0, 6)}...${account.substring(38)}` : 'Not connected'}
+    <div className="min-h-screen bg-gradient-to-br from-space-indigo via-purple-900/20 to-space-indigo relative overflow-hidden">
+      {/* Floating Particles Background - Client-side only */}
+      {isClient && <FloatingParticles />}
+      
+      {/* Cosmic Background Pattern */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0 bg-gradient-to-r from-electric-cyan/5 via-transparent to-purple-500/5"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(0,255,255,0.1),transparent_50%)] animate-pulse"></div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="relative z-10 flex justify-between items-center p-6 lg:p-8">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 bg-electric-cyan rounded-lg flex items-center justify-center">
+            <span className="text-space-indigo font-bold text-lg">D</span>
+          </div>
+          <span className="text-light-silver font-semibold text-xl">DecentralVault</span>
+        </div>
+        
+        <button
+          onClick={handleEnterVault}
+          disabled={isLoading}
+          className="px-6 py-2 bg-gradient-to-r from-electric-cyan to-blue-400 text-space-indigo font-semibold rounded-lg hover:shadow-lg hover:shadow-electric-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? 'Connecting...' : 'Connect Wallet'}
+        </button>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] px-6 text-center">
+        {/* 3D Animated Globe */}
+        <div className="mb-12 animate-fade-in relative">
+          {/* Outer glow effect */}
+          <div className="absolute inset-0 rounded-full bg-electric-cyan opacity-20 blur-xl animate-pulse" style={{ width: '384px', height: '384px', margin: '0 auto' }}></div>
+          <Globe3D />
+        </div>
+
+        {/* Hero Text */}
+        <div className="max-w-4xl mx-auto mb-12 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
+          <h1 className="text-5xl lg:text-7xl font-bold text-light-silver mb-6 leading-tight">
+            Your Secure
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-electric-cyan to-blue-400">
+              Web3 Digital Vault
             </span>
-            {account && (
-               <button
-                 onClick={() => {
-                   disconnectWallet();
-                 }}
-                 className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-               >
-                 Disconnect
-               </button>
-             )}
+          </h1>
+          <p className="text-xl lg:text-2xl text-light-silver/80 mb-8 leading-relaxed">
+            Store, share, and manage your files on the decentralized web with 
+            <br className="hidden lg:block" />
+            military-grade encryption and blockchain security.
+          </p>
+        </div>
+
+        {/* CTA Button */}
+        <div className="animate-fade-in-up" style={{ animationDelay: '1000ms' }}>
+          <button
+            onClick={handleEnterVault}
+            disabled={isLoading}
+            className="group relative px-12 py-4 bg-gradient-to-r from-electric-cyan to-blue-400 text-space-indigo font-bold text-lg rounded-full hover:shadow-2xl hover:shadow-electric-cyan/40 transition-all duration-500 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+          >
+            <span className="relative z-10">
+              {isLoading ? 'Initializing Vault...' : 'Enter Your Vault'}
+            </span>
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-electric-cyan opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </button>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-4xl lg:text-5xl font-bold text-center text-light-silver mb-16">
+            Why Choose <span className="text-electric-cyan">DecentralVault</span>?
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <FeatureCard
+              icon="🔒"
+              title="Decentralized Storage"
+              description="Your files are distributed across the IPFS network, ensuring no single point of failure."
+              delay={0}
+            />
+            <FeatureCard
+              icon="🛡️"
+              title="Client-side Encryption"
+              description="Files are encrypted on your device before upload, ensuring only you have access."
+              delay={200}
+            />
+            <FeatureCard
+              icon="🌍"
+              title="Global Access"
+              description="Access your files from anywhere in the world with just your wallet connection."
+              delay={400}
+            />
+            <FeatureCard
+              icon="👑"
+              title="Data Ownership"
+              description="You own your data completely. No corporate servers, no data mining, no surveillance."
+              delay={600}
+            />
           </div>
         </div>
+      </section>
 
-        {/* Tab Navigation */}
-        <div className="flex mb-6 border-b border-gray-700">
-          <button
-            onClick={() => setActiveTab('myFiles')}
-            className={`px-6 py-3 font-medium transition-colors ${
-              activeTab === 'myFiles'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            My Files
-          </button>
-          <button
-            onClick={() => setActiveTab('sharedFiles')}
-            className={`px-6 py-3 font-medium transition-colors ${
-              activeTab === 'sharedFiles'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Shared With Me
-          </button>
+      {/* Footer */}
+      <footer className="relative z-10 py-8 px-6 border-t border-electric-cyan/20">
+        <div className="max-w-6xl mx-auto text-center text-light-silver/60">
+          <p>&copy; 2024 DecentralVault. Powered by IPFS, Ethereum, and Web3 technology.</p>
         </div>
+      </footer>
 
-        {/* Content based on active tab */}
-        {activeTab === 'myFiles' ? (
-          <>
-            <div className="bg-gray-800 p-6 rounded-lg mb-8">
-                <h2 className="text-xl mb-4">Upload New File</h2>
-                <input type="file" onChange={handleFileChange} className="mb-4" />
-                <input
-                    type="password"
-                    placeholder="Encryption Key"
-                    value={encryptionKey}
-                    onChange={(e) => setEncryptionKey(e.target.value)}
-                    className="p-2 rounded bg-gray-700 border border-gray-600 mb-4 w-full"
-                />
-                <button onClick={handleUpload} className="px-6 py-2 bg-green-600 rounded hover:bg-green-700">Upload</button>
-            </div>
-
-            <Dashboard files={files} />
-          </>
-        ) : (
-          <SharedFiles account={account} contract={contract} />
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8">
-          {files.map((file, index) => (
-            <div key={index}>
-                <FileCrystal fileName={file.name} />
-                <div className="mt-2 space-y-2">
-                  <button onClick={() => handleDownload(file)} className="w-full px-4 py-2 bg-blue-600 rounded hover:bg-blue-700">Download</button>
-                  <button onClick={() => handleShareFile(file)} className="w-full px-4 py-2 bg-purple-600 rounded hover:bg-purple-700">Share</button>
-                  <button onClick={() => handleViewVersions(file)} className="w-full px-4 py-2 bg-orange-600 rounded hover:bg-orange-700">Versions</button>
-                </div>
-            </div>
-          ))}
-        </div>
-
-        {showShareModal && selectedFileForSharing && (
-          <FileSharing
-            file={selectedFileForSharing}
-            contract={contract}
-            account={account}
-            onClose={closeShareModal}
-          />
-        )}
-
-        {showVersionsModal && selectedFileForVersions && (
-          <FileVersions
-            file={selectedFileForVersions}
-            contract={contract}
-            account={account}
-            encryptionKey={encryptionKey}
-            onClose={closeVersionsModal}
-          />
-        )}
-      </main>
+      {/* Custom Styles */}
+      <style jsx>{`
+        @keyframes orbit {
+          from {
+            transform: translate(-50%, -50%) rotate(0deg);
+          }
+          to {
+            transform: translate(-50%, -50%) rotate(360deg);
+          }
+        }
+        
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px) rotate(0deg);
+            opacity: 0.3;
+          }
+          50% {
+            transform: translateY(-20px) rotate(180deg);
+            opacity: 1;
+          }
+        }
+        
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 1s ease-out forwards;
+        }
+        
+        .animate-fade-in-up {
+          animation: fade-in-up 1s ease-out forwards;
+        }
+        
+        .animate-float {
+          animation: float linear infinite;
+        }
+      `}</style>
     </div>
   );
 }
-

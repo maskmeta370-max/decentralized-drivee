@@ -9,6 +9,7 @@ export const useWallet = () => {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const isMetaMaskInstalled = typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
 
@@ -25,6 +26,7 @@ export const useWallet = () => {
   const checkIfWalletIsConnected = async () => {
     if (!isMetaMaskInstalled) {
       console.log("MetaMask is not installed.");
+      setIsInitialized(true);
       return;
     }
     try {
@@ -36,6 +38,8 @@ export const useWallet = () => {
       }
     } catch (error) {
       console.error('Error checking wallet connection:', error);
+    } finally {
+      setIsInitialized(true);
     }
   };
 
@@ -104,7 +108,8 @@ export const useWallet = () => {
     isLoading, 
     connectWallet, 
     disconnectWallet, 
-    isMetaMaskInstalled 
+    isMetaMaskInstalled,
+    isInitialized 
   };
 };
 
