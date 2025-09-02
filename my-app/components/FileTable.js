@@ -12,12 +12,14 @@ import {
   EyeIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
+import FileSharingInterface from './FileSharingInterface';
 
 const FileTable = ({ files = [], onFileAction }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [openDropdown, setOpenDropdown] = useState(null);
   const [copiedCID, setCopiedCID] = useState(null);
+  const [sharingFile, setSharingFile] = useState(null);
 
   // Sample data if no files provided
   const sampleFiles = [
@@ -197,7 +199,7 @@ const FileTable = ({ files = [], onFileAction }) => {
             </button>
             <button
               onClick={() => {
-                onFileAction?.('share', file);
+                setSharingFile(file);
                 setOpenDropdown(null);
               }}
               className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
@@ -337,6 +339,14 @@ const FileTable = ({ files = [], onFileAction }) => {
           <h3 className="mt-2 text-sm font-medium text-gray-900">No files</h3>
           <p className="mt-1 text-sm text-gray-500">Get started by uploading your first file.</p>
         </div>
+      )}
+
+      {/* File Sharing Interface */}
+      {sharingFile && (
+        <FileSharingInterface
+          file={sharingFile}
+          onClose={() => setSharingFile(null)}
+        />
       )}
     </div>
   );

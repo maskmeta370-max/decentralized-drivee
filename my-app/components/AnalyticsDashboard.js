@@ -2,15 +2,22 @@
 import { useState, useEffect } from 'react';
 import { 
   ChartBarIcon,
-  CloudIcon,
   ShareIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   GlobeAltIcon,
   ServerIcon,
   DocumentIcon,
-  UsersIcon
+  UsersIcon,
+  EyeIcon,
+  CurrencyDollarIcon,
+  CpuChipIcon,
+  ShieldCheckIcon,
+  ClockIcon,
+  CloudArrowUpIcon,
+  CloudArrowDownIcon
 } from '@heroicons/react/24/outline';
+import { CloudIcon } from '@heroicons/react/24/solid';
 
 const AnalyticsDashboard = ({ files = [], stats = {} }) => {
   const [timeRange, setTimeRange] = useState('7d'); // 7d, 30d, 90d, 1y
@@ -39,7 +46,45 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
       { month: 'Apr', uploads: 15, downloads: 67, storage: 2.4 },
       { month: 'May', uploads: 22, downloads: 89, storage: 3.1 },
       { month: 'Jun', uploads: 18, downloads: 76, storage: 2.9 }
-    ]
+    ],
+    totalEarnings: '1,234.56 STOR',
+    accessLogs: 5847,
+    replicationFactor: 3.2,
+    networkLatency: '45ms'
+  });
+
+  const [uploadHistory, setUploadHistory] = useState([
+    { id: 1, fileName: 'project-docs.pdf', size: '2.4 MB', timestamp: '2024-01-15 14:30', status: 'completed', hash: 'QmX7Y8Z9...' },
+    { id: 2, fileName: 'presentation.pptx', size: '15.7 MB', timestamp: '2024-01-15 13:45', status: 'completed', hash: 'QmA1B2C3...' },
+    { id: 3, fileName: 'database-backup.sql', size: '156.2 MB', timestamp: '2024-01-15 12:20', status: 'completed', hash: 'QmD4E5F6...' },
+    { id: 4, fileName: 'video-tutorial.mp4', size: '89.3 MB', timestamp: '2024-01-15 11:15', status: 'uploading', hash: 'QmG7H8I9...' },
+    { id: 5, fileName: 'source-code.zip', size: '34.1 MB', timestamp: '2024-01-15 10:30', status: 'completed', hash: 'QmJ0K1L2...' }
+  ]);
+
+  const [downloadHistory, setDownloadHistory] = useState([
+    { id: 1, fileName: 'research-paper.pdf', size: '3.2 MB', timestamp: '2024-01-15 15:20', status: 'completed', peer: 'node_abc123' },
+    { id: 2, fileName: 'software-installer.exe', size: '245.8 MB', timestamp: '2024-01-15 14:55', status: 'completed', peer: 'node_def456' },
+    { id: 3, fileName: 'music-album.zip', size: '78.9 MB', timestamp: '2024-01-15 13:30', status: 'downloading', peer: 'node_ghi789' },
+    { id: 4, fileName: 'photo-collection.tar', size: '512.4 MB', timestamp: '2024-01-15 12:45', status: 'completed', peer: 'node_jkl012' }
+  ]);
+
+  const [accessLogs, setAccessLogs] = useState([
+    { id: 1, action: 'File Access', fileName: 'project-docs.pdf', user: '0x1234...5678', timestamp: '2024-01-15 15:45', ip: '192.168.1.100' },
+    { id: 2, action: 'Permission Grant', fileName: 'presentation.pptx', user: '0x9876...5432', timestamp: '2024-01-15 15:30', ip: '10.0.0.50' },
+    { id: 3, action: 'File Download', fileName: 'database-backup.sql', user: '0x5555...7777', timestamp: '2024-01-15 15:15', ip: '172.16.0.25' },
+    { id: 4, action: 'Share Link Created', fileName: 'video-tutorial.mp4', user: '0x1111...9999', timestamp: '2024-01-15 15:00', ip: '192.168.1.200' },
+    { id: 5, action: 'File Upload', fileName: 'source-code.zip', user: '0x8888...4444', timestamp: '2024-01-15 14:45', ip: '10.0.0.75' }
+  ]);
+
+  const [networkParticipation, setNetworkParticipation] = useState({
+    storageProvided: '500 GB',
+    storageUsed: '1.2 TB',
+    bandwidthShared: '2.8 TB',
+    rewardsEarned: '1,234.56 STOR',
+    proofSubmissions: 847,
+    successRate: '99.2%',
+    reputation: 892,
+    stakingAmount: '10,000 STOR'
   });
 
   const timeRanges = [
@@ -296,33 +341,239 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
         title="Monthly Activity Overview"
       />
 
-      {/* Recent Activity */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          {[
-            { action: 'File uploaded', file: 'project-proposal.pdf', time: '2 hours ago', type: 'upload' },
-            { action: 'File shared', file: 'team-photo.jpg', time: '4 hours ago', type: 'share' },
-            { action: 'File downloaded', file: 'smart-contract.sol', time: '6 hours ago', type: 'download' },
-            { action: 'File uploaded', file: 'presentation.pptx', time: '1 day ago', type: 'upload' },
-            { action: 'File shared', file: 'whitepaper.pdf', time: '2 days ago', type: 'share' }
-          ].map((activity, index) => (
-            <div key={index} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className={`w-2 h-2 rounded-full ${
-                  activity.type === 'upload' ? 'bg-green-500' :
-                  activity.type === 'share' ? 'bg-blue-500' : 'bg-purple-500'
-                }`} />
-                <div>
-                  <div className="text-sm font-medium text-gray-900">{activity.action}</div>
-                  <div className="text-xs text-gray-500">{activity.file}</div>
+      {/* Upload/Download History */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upload History */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload History</h3>
+          <div className="space-y-3">
+            {uploadHistory.map((upload) => (
+              <div key={upload.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-2 h-2 rounded-full ${
+                    upload.status === 'completed' ? 'bg-green-500' : 'bg-yellow-500'
+                  }`} />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{upload.fileName}</div>
+                    <div className="text-xs text-gray-500">{upload.size} • {upload.timestamp}</div>
+                    <div className="text-xs text-blue-600">{upload.hash}</div>
+                  </div>
+                </div>
+                <div className={`text-xs px-2 py-1 rounded-full ${
+                  upload.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {upload.status}
                 </div>
               </div>
-              <div className="text-xs text-gray-500">{activity.time}</div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </div>
+
+        {/* Download History */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Download History</h3>
+          <div className="space-y-3">
+            {downloadHistory.map((download) => (
+              <div key={download.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-2 h-2 rounded-full ${
+                    download.status === 'completed' ? 'bg-blue-500' : 'bg-yellow-500'
+                  }`} />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{download.fileName}</div>
+                    <div className="text-xs text-gray-500">{download.size} • {download.timestamp}</div>
+                    <div className="text-xs text-purple-600">from {download.peer}</div>
+                  </div>
+                </div>
+                <div className={`text-xs px-2 py-1 rounded-full ${
+                  download.status === 'completed' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {download.status}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Access Logs */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Access Logs</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {accessLogs.map((log) => (
+                <tr key={log.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{log.action}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.fileName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{log.user}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.ip}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.timestamp}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Network Participation */}
+       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+         <h3 className="text-lg font-semibold text-gray-900 mb-4">Network Participation</h3>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+           <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
+             <CurrencyDollarIcon className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+             <div className="text-2xl font-bold text-gray-900">{networkParticipation.rewardsEarned}</div>
+             <div className="text-sm text-gray-600">Rewards Earned</div>
+           </div>
+           <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
+             <CloudIcon className="w-8 h-8 text-green-600 mx-auto mb-2" />
+             <div className="text-2xl font-bold text-gray-900">{networkParticipation.storageProvided}</div>
+             <div className="text-sm text-gray-600">Storage Provided</div>
+           </div>
+           <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
+             <ShieldCheckIcon className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+             <div className="text-2xl font-bold text-gray-900">{networkParticipation.reputation}</div>
+             <div className="text-sm text-gray-600">Reputation Score</div>
+           </div>
+           <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg">
+             <CpuChipIcon className="w-8 h-8 text-orange-600 mx-auto mb-2" />
+             <div className="text-2xl font-bold text-gray-900">{networkParticipation.proofSubmissions}</div>
+             <div className="text-sm text-gray-600">Proof Submissions</div>
+           </div>
+         </div>
+         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+             <span className="text-gray-700">Success Rate</span>
+             <span className="font-semibold text-green-600">{networkParticipation.successRate}</span>
+           </div>
+           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+             <span className="text-gray-700">Staking Amount</span>
+             <span className="font-semibold text-blue-600">{networkParticipation.stakingAmount}</span>
+           </div>
+         </div>
+       </div>
+
+       {/* Earnings and Network Activity Charts */}
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         {/* Earnings Chart */}
+         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+           <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Earnings (STOR)</h3>
+           <div className="h-64">
+             <svg className="w-full h-full" viewBox="0 0 400 200">
+               <defs>
+                 <linearGradient id="earningsGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                   <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
+                   <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.1" />
+                 </linearGradient>
+               </defs>
+               {chartData.monthlyData.map((data, index) => {
+                 const x = (index * 60) + 40;
+                 const height = (data.earnings / 500) * 150;
+                 const y = 180 - height;
+                 return (
+                   <g key={index}>
+                     <rect x={x - 15} y={y} width="30" height={height} fill="url(#earningsGradient)" rx="2" />
+                     <text x={x} y="195" textAnchor="middle" className="text-xs fill-gray-600">{data.month}</text>
+                     <text x={x} y={y - 5} textAnchor="middle" className="text-xs fill-gray-800">{data.earnings}</text>
+                   </g>
+                 );
+               })}
+             </svg>
+           </div>
+         </div>
+
+         {/* Network Activity Chart */}
+         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+           <h3 className="text-lg font-semibold text-gray-900 mb-4">Network Activity</h3>
+           <div className="h-64">
+             <svg className="w-full h-full" viewBox="0 0 400 200">
+               <defs>
+                 <linearGradient id="activityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                   <stop offset="0%" stopColor="#10B981" stopOpacity="0.3" />
+                   <stop offset="100%" stopColor="#10B981" stopOpacity="0.1" />
+                 </linearGradient>
+               </defs>
+               {chartData.networkActivity.slice(0, 12).map((activity, index) => {
+                 const x1 = (index * 30) + 40;
+                 const x2 = ((index + 1) * 30) + 40;
+                 const y1 = 180 - (activity / 600) * 150;
+                 const y2 = index < 11 ? 180 - (chartData.networkActivity[index + 1] / 600) * 150 : y1;
+                 return (
+                   <g key={index}>
+                     {index < 11 && (
+                       <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#10B981" strokeWidth="2" />
+                     )}
+                     <circle cx={x1} cy={y1} r="3" fill="#10B981" />
+                     {index % 2 === 0 && (
+                       <text x={x1} y="195" textAnchor="middle" className="text-xs fill-gray-600">{index + 1}</text>
+                     )}
+                   </g>
+                 );
+               })}
+             </svg>
+           </div>
+         </div>
+       </div>
+
+       {/* Additional Metrics */}
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+           <div className="flex items-center justify-between">
+             <div>
+               <h4 className="text-sm font-medium text-gray-500">Total Earnings</h4>
+               <p className="text-2xl font-bold text-gray-900">{analytics.totalEarnings}</p>
+             </div>
+             <CurrencyDollarIcon className="w-8 h-8 text-blue-500" />
+           </div>
+           <div className="mt-4">
+             <div className="flex items-center text-sm text-green-600">
+               <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
+               <span>+12.5% from last month</span>
+             </div>
+           </div>
+         </div>
+
+         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+           <div className="flex items-center justify-between">
+             <div>
+               <h4 className="text-sm font-medium text-gray-500">Access Events</h4>
+               <p className="text-2xl font-bold text-gray-900">{analytics.accessLogs}</p>
+             </div>
+             <EyeIcon className="w-8 h-8 text-purple-500" />
+           </div>
+           <div className="mt-4">
+             <div className="flex items-center text-sm text-green-600">
+               <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
+               <span>+8.3% from last week</span>
+             </div>
+           </div>
+         </div>
+
+         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+           <div className="flex items-center justify-between">
+             <div>
+               <h4 className="text-sm font-medium text-gray-500">Network Latency</h4>
+               <p className="text-2xl font-bold text-gray-900">{analytics.networkLatency}</p>
+             </div>
+             <GlobeAltIcon className="w-8 h-8 text-green-500" />
+           </div>
+           <div className="mt-4">
+             <div className="flex items-center text-sm text-green-600">
+               <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
+               <span>-5.2ms improvement</span>
+             </div>
+           </div>
+         </div>
+       </div>
     </div>
   );
 };
