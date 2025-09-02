@@ -9,12 +9,15 @@ import { useWallet } from '../../hooks/useWallet';
 // Components
 import Sidebar from '../../components/Sidebar';
 import FileCrystal from '../../components/FileCrystal';
+import FileTable from '../../components/FileTable';
 import Dashboard from '../../components/Dashboard';
 import FileSharing from '../../components/FileSharing';
 import FileVersions from '../../components/FileVersions';
 import SharedFiles from '../../components/SharedFiles';
 import ModernSidebar from '../../components/dashboard/ModernSidebar';
 import StatCard from '../../components/dashboard/StatCard';
+import UploadCenter from '../../components/UploadCenter';
+import AnalyticsDashboard from '../../components/AnalyticsDashboard';
 
 
 
@@ -32,8 +35,8 @@ export default function DashboardPage() {
   const [showVersionsModal, setShowVersionsModal] = useState(false);
   const [selectedFileForVersions, setSelectedFileForVersions] = useState(null);
   const [activeTab, setActiveTab] = useState('myFiles'); // 'myFiles' or 'sharedFiles'
-  const [activeSection, setActiveSection] = useState('dashboard'); // New state for sidebar navigation
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [activeSection, setActiveSection] = useState('dashboard'); // 'dashboard', 'vault', 'upload', 'analytics', 'settings'
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
   const [stats, setStats] = useState({
     totalFiles: 0,
     storageUsed: '0 MB',
@@ -194,7 +197,15 @@ export default function DashboardPage() {
 
   const handleViewVersions = (file) => {
     setSelectedFileForVersions(file);
-    setShowVersionsModal(true);
+    setShowVersionModal(true);
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const closeVersionsModal = () => {
@@ -348,29 +359,29 @@ export default function DashboardPage() {
                 {/* View Mode Toggle */}
                 <div className="flex items-center space-x-2 bg-space-indigo/50 rounded-lg p-1">
                   <button
+                    onClick={() => setViewMode('table')}
+                    className={`p-2 rounded-md transition-all duration-200 ${
+                      viewMode === 'table'
+                        ? 'bg-electric-cyan text-space-indigo'
+                        : 'text-light-silver/60 hover:text-light-silver'
+                    }`}
+                    title="Table View"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 8a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 12a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 16a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
+                    </svg>
+                  </button>
+                  <button
                     onClick={() => setViewMode('grid')}
                     className={`p-2 rounded-md transition-all duration-200 ${
                       viewMode === 'grid'
                         ? 'bg-electric-cyan text-space-indigo'
                         : 'text-light-silver/60 hover:text-light-silver'
                     }`}
-                    title="Grid View"
+                    title="3D View"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-md transition-all duration-200 ${
-                      viewMode === 'list'
-                        ? 'bg-electric-cyan text-space-indigo'
-                        : 'text-light-silver/60 hover:text-light-silver'
-                    }`}
-                    title="List View"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 8a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 12a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 16a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
                     </svg>
                   </button>
                 </div>
@@ -378,12 +389,16 @@ export default function DashboardPage() {
             </div>
 
             {activeTab === 'myFiles' ? (
-              <div className={viewMode === 'grid' 
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" 
-                : "space-y-4"
-              }>
+              viewMode === 'table' ? (
+                <FileTable 
+                  files={files} 
+                  onDownload={handleDownload}
+                  onShare={handleShareFile}
+                  onViewVersions={handleViewVersions}
+                />
+              ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {files.map((file, index) => (
-                  viewMode === 'grid' ? (
                     <div key={index} className="bg-gradient-to-br from-space-indigo/80 to-purple-900/50 backdrop-blur-sm border border-electric-cyan/20 rounded-xl p-6 hover:border-electric-cyan/40 transition-all duration-300 group">
                       <div className="text-center mb-4">
                         <FileCrystal 
@@ -416,48 +431,9 @@ export default function DashboardPage() {
                         </button>
                       </div>
                     </div>
-                  ) : (
-                    <div key={index} className="bg-gradient-to-r from-space-indigo/60 to-purple-900/40 backdrop-blur-sm border border-electric-cyan/20 rounded-xl p-4 hover:border-electric-cyan/40 transition-all duration-300 group">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                          <FileCrystal 
-                            fileName={file.name} 
-                            fileSize={file.size || '0 MB'}
-                            uploadDate={file.uploadDate}
-                            viewMode="list"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-light-silver font-semibold truncate">{file.name}</h3>
-                          <p className="text-light-silver/60 text-sm">{file.uploadDate}</p>
-                          <p className="text-light-silver/40 text-xs">{file.size || '0 MB'}</p>
-                        </div>
-                        <div className="flex-shrink-0 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <button
-                            onClick={() => handleDownload(file)}
-                            className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-md hover:bg-blue-500/30 transition-colors duration-200 text-sm"
-                          >
-                            Download
-                          </button>
-                          <button
-                            onClick={() => handleShareFile(file)}
-                            className="px-3 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-md hover:bg-purple-500/30 transition-colors duration-200 text-sm"
-                          >
-                            Share
-                          </button>
-                          <button
-                            onClick={() => handleViewVersions(file)}
-                            className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-md hover:bg-orange-500/30 transition-colors duration-200 text-sm"
-                          >
-                            Versions
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
                 ))}
                 {files.length === 0 && (
-                  <div className={viewMode === 'grid' ? "col-span-full text-center py-16" : "text-center py-16"}>
+                  <div className="col-span-full text-center py-16">
                     <span className="text-6xl mb-4 block">📁</span>
                     <h3 className="text-2xl font-bold text-light-silver mb-2">Your vault is empty</h3>
                     <p className="text-light-silver/60 mb-6">Upload your first file to get started</p>
@@ -470,6 +446,7 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+              )
             ) : (
               <SharedFiles account={account} contract={contract} />
             )}
@@ -479,73 +456,34 @@ export default function DashboardPage() {
       case 'upload':
         return (
           <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-light-silver">Upload Center</h1>
-            <div className="bg-gradient-to-br from-space-indigo/80 to-purple-900/50 backdrop-blur-sm border border-electric-cyan/20 rounded-xl p-8">
-              <h2 className="text-2xl font-bold text-light-silver mb-6">Upload New Files</h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-light-silver font-medium mb-2">Select File</label>
-                  <input
-                    type="file"
-                    onChange={handleFileChange}
-                    className="w-full p-4 bg-electric-cyan/10 border border-electric-cyan/20 rounded-lg text-light-silver file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-electric-cyan file:text-space-indigo hover:file:bg-electric-cyan/80"
-                  />
-                </div>
-                <div>
-                  <label className="block text-light-silver font-medium mb-2">Encryption Key</label>
-                  <input
-                    type="password"
-                    placeholder="Enter encryption key for your file"
-                    value={encryptionKey}
-                    onChange={(e) => setEncryptionKey(e.target.value)}
-                    className="w-full p-4 bg-electric-cyan/10 border border-electric-cyan/20 rounded-lg text-light-silver placeholder-light-silver/50 focus:border-electric-cyan/40 focus:outline-none"
-                  />
-                </div>
-                <button
-                  onClick={handleUpload}
-                  disabled={!selectedFile || !encryptionKey}
-                  className="w-full py-4 bg-gradient-to-r from-electric-cyan to-blue-400 text-space-indigo font-bold text-lg rounded-lg hover:shadow-lg hover:shadow-electric-cyan/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Upload to Vault
-                </button>
-              </div>
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-light-silver mb-2">Upload Center</h1>
+              <p className="text-light-silver/60">Securely upload and encrypt your files to the decentralized network.</p>
             </div>
+            <UploadCenter 
+               onUpload={(files, options) => {
+                 console.log('Uploading files:', files, options);
+                 // Handle file upload logic here
+                 files.forEach(fileData => {
+                   const newFile = {
+                     id: Date.now() + Math.random(),
+                     name: fileData.name,
+                     size: formatFileSize(fileData.file.size),
+                     uploadDate: new Date().toLocaleDateString(),
+                     type: fileData.type,
+                     cid: `Qm${Math.random().toString(36).substr(2, 44)}`, // Mock CID
+                     encrypted: options.encryptionEnabled
+                   };
+                   setFiles(prev => [...prev, newFile]);
+                 });
+               }}
+             />
           </div>
         );
 
       case 'analytics':
         return (
-          <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-light-silver">Analytics Dashboard</h1>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-gradient-to-br from-space-indigo/80 to-purple-900/50 backdrop-blur-sm border border-electric-cyan/20 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-light-silver mb-4">Storage Usage</h2>
-                <div className="text-center py-8">
-                  <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-r from-electric-cyan to-blue-400 flex items-center justify-center">
-                    <span className="text-space-indigo font-bold text-2xl">{stats.totalFiles}</span>
-                  </div>
-                  <p className="text-light-silver/80">Files stored in your vault</p>
-                </div>
-              </div>
-              <div className="bg-gradient-to-br from-space-indigo/80 to-purple-900/50 backdrop-blur-sm border border-electric-cyan/20 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-light-silver mb-4">Network Participation</h2>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-light-silver/80">Files Shared</span>
-                    <span className="text-electric-cyan font-semibold">{stats.activeShares}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-light-silver/80">Storage Contributed</span>
-                    <span className="text-electric-cyan font-semibold">{stats.storageUsed}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-light-silver/80">Network Health</span>
-                    <span className="text-green-400 font-semibold">Excellent</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AnalyticsDashboard files={files} />
         );
 
       case 'settings':
