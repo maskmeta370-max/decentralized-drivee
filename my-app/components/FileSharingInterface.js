@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ShareIcon, LinkIcon, UserGroupIcon, ShieldCheckIcon, ClockIcon, EyeIcon, PencilIcon, TrashIcon, DocumentDuplicateIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ShareIcon, LinkIcon, UserGroupIcon, ShieldCheckIcon, ClockIcon, EyeIcon, PencilIcon, TrashIcon, DocumentDuplicateIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { AccessControlService } from '../utils/accessControl';
 import { EncryptionService } from '../utils/encryption';
+import { getFileManagerContract, getProvider, getSigner } from '../utils/web3';
+import { ethers } from 'ethers';
 
 const FileSharingInterface = ({ file, onClose }) => {
   const [shareLinks, setShareLinks] = useState([]);
@@ -18,13 +20,54 @@ const FileSharingInterface = ({ file, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [userAddress, setUserAddress] = useState('');
+  const [gasEstimate, setGasEstimate] = useState(null);
+  const [transactionStatus, setTransactionStatus] = useState('');
+  const [blockchainError, setBlockchainError] = useState('');
 
   const accessControl = new AccessControlService();
   const encryption = new EncryptionService();
 
   useEffect(() => {
     loadExistingShares();
+    checkWalletConnection();
   }, [file]);
+
+  const checkWalletConnection = async () => {
+    try {
+      const provider = getProvider();
+      if (provider && window.ethereum) {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          setWalletConnected(true);
+          setUserAddress(accounts[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check wallet connection:', error);
+      setBlockchainError('Failed to connect to wallet');
+    }
+  };
+
+  const connectWallet = async () => {
+    try {
+      if (!window.ethereum) {
+        setBlockchainError('Please install MetaMask to use blockchain features');
+        return;
+      }
+      
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (accounts.length > 0) {
+        setWalletConnected(true);
+        setUserAddress(accounts[0]);
+        setBlockchainError('');
+      }
+    } catch (error) {
+      console.error('Failed to connect wallet:', error);
+      setBlockchainError('Failed to connect wallet: ' + error.message);
+    }
+  };
 
   const loadExistingShares = async () => {
     try {
@@ -84,39 +127,79 @@ const FileSharingInterface = ({ file, onClose }) => {
   };
 
   const shareWithUser = async () => {
+    if (!walletConnected) {
+      setBlockchainError('Please connect your wallet first');
+      return;
+    }
+
+    if (!ethers.isAddress(newShare.email)) {
+      setBlockchainError('Please enter a valid Ethereum address');
+      return;
+    }
+
     setLoading(true);
+    setTransactionStatus('Estimating gas fees...');
+    setBlockchainError('');
+    
     try {
-      const permissionData = {
-        fileId: file.id,
-        userEmail: newShare.email,
-        permission: newShare.permission,
-        expiresIn: newShare.expiresIn,
-        grantedBy: 'current_user_id' // Replace with actual user ID
-      };
-
-      const permission = await accessControl.grantFilePermission(permissionData);
+      const contract = await getFileManagerContract();
       
-      setPermissions(prev => [...prev, {
-        id: permission.id,
-        userEmail: newShare.email,
-        permission: newShare.permission,
-        expiresAt: permission.expiresAt,
-        createdAt: new Date().toISOString(),
-        status: 'active'
-      }]);
-
-      // Reset form
-      setNewShare({
-        type: 'link',
-        email: '',
-        permission: 'read',
-        expiresIn: '7d',
-        password: '',
-        downloadLimit: 0,
-        allowedIPs: []
+      // Estimate gas for the transaction
+      const gasEstimate = await contract.grantFileAccess.estimateGas(file.id, newShare.email);
+      const provider = getProvider();
+      const gasPrice = await provider.getFeeData();
+      const estimatedCost = gasEstimate * gasPrice.gasPrice;
+      
+      setGasEstimate({
+        gasLimit: gasEstimate.toString(),
+        gasPrice: ethers.formatUnits(gasPrice.gasPrice, 'gwei'),
+        estimatedCost: ethers.formatEther(estimatedCost)
       });
+      
+      setTransactionStatus('Please confirm the transaction in your wallet...');
+      
+      // Execute the blockchain transaction
+      const tx = await contract.grantFileAccess(file.id, newShare.email);
+      
+      setTransactionStatus('Transaction submitted. Waiting for confirmation...');
+      
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+      
+      if (receipt.status === 1) {
+        setTransactionStatus('Transaction confirmed! Access granted successfully.');
+        
+        // Update local state
+        setPermissions(prev => [...prev, {
+          id: receipt.transactionHash,
+          userAddress: newShare.email,
+          permission: newShare.permission,
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year
+          createdAt: new Date().toISOString(),
+          status: 'active',
+          transactionHash: receipt.transactionHash,
+          blockNumber: receipt.blockNumber
+        }]);
+        
+        // Reset form
+        setNewShare({
+          type: 'link',
+          email: '',
+          permission: 'read',
+          expiresIn: '7d',
+          password: '',
+          downloadLimit: 0,
+          allowedIPs: []
+        });
+        
+        setTimeout(() => setTransactionStatus(''), 5000);
+      } else {
+        throw new Error('Transaction failed');
+      }
     } catch (error) {
       console.error('Failed to share with user:', error);
+      setBlockchainError('Transaction failed: ' + (error.reason || error.message));
+      setTransactionStatus('');
     } finally {
       setLoading(false);
     }
@@ -141,12 +224,57 @@ const FileSharingInterface = ({ file, onClose }) => {
     }
   };
 
-  const revokePermission = async (permissionId) => {
+  const revokePermission = async (permissionId, userAddress) => {
+    if (!walletConnected) {
+      setBlockchainError('Please connect your wallet first');
+      return;
+    }
+
+    setLoading(true);
+    setTransactionStatus('Revoking access...');
+    setBlockchainError('');
+    
     try {
-      await accessControl.revokeFilePermission(permissionId);
-      setPermissions(prev => prev.filter(perm => perm.id !== permissionId));
+      const contract = await getFileManagerContract();
+      
+      // Estimate gas for the revoke transaction
+      const gasEstimate = await contract.revokeFileAccess.estimateGas(file.id, userAddress);
+      const provider = getProvider();
+      const gasPrice = await provider.getFeeData();
+      const estimatedCost = gasEstimate * gasPrice.gasPrice;
+      
+      setGasEstimate({
+        gasLimit: gasEstimate.toString(),
+        gasPrice: ethers.formatUnits(gasPrice.gasPrice, 'gwei'),
+        estimatedCost: ethers.formatEther(estimatedCost)
+      });
+      
+      setTransactionStatus('Please confirm the revoke transaction in your wallet...');
+      
+      // Execute the blockchain transaction
+      const tx = await contract.revokeFileAccess(file.id, userAddress);
+      
+      setTransactionStatus('Transaction submitted. Waiting for confirmation...');
+      
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+      
+      if (receipt.status === 1) {
+        setTransactionStatus('Access revoked successfully!');
+        
+        // Update local state
+        setPermissions(prev => prev.filter(perm => perm.id !== permissionId));
+        
+        setTimeout(() => setTransactionStatus(''), 3000);
+      } else {
+        throw new Error('Revoke transaction failed');
+      }
     } catch (error) {
       console.error('Failed to revoke permission:', error);
+      setBlockchainError('Revoke failed: ' + (error.reason || error.message));
+      setTransactionStatus('');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -222,6 +350,76 @@ const FileSharingInterface = ({ file, onClose }) => {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Wallet Connection Status */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className={`w-3 h-3 rounded-full ${
+                  walletConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}></div>
+                <div>
+                  <h4 className="font-medium text-gray-900">
+                    {walletConnected ? 'Wallet Connected' : 'Wallet Not Connected'}
+                  </h4>
+                  {walletConnected && (
+                    <p className="text-sm text-gray-600">
+                      {userAddress.slice(0, 6)}...{userAddress.slice(-4)}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {!walletConnected && (
+                <button
+                  onClick={connectWallet}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Connect Wallet
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Transaction Status */}
+          {transactionStatus && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+                <p className="text-sm text-yellow-800">{transactionStatus}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Gas Estimate */}
+          {gasEstimate && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <h4 className="font-medium text-gray-900 mb-2">Transaction Details</h4>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Gas Limit:</span>
+                  <p className="font-medium">{gasEstimate.gasLimit}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Gas Price:</span>
+                  <p className="font-medium">{gasEstimate.gasPrice} Gwei</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Estimated Cost:</span>
+                  <p className="font-medium">{gasEstimate.estimatedCost} ETH</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {blockchainError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
+                <p className="text-sm text-red-800">{blockchainError}</p>
+              </div>
+            </div>
+          )}
+
           {/* Share Options */}
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Create New Share</h3>
@@ -252,19 +450,32 @@ const FileSharingInterface = ({ file, onClose }) => {
               </button>
             </div>
 
-            {/* User Email Input (for user sharing) */}
+            {/* User Address Input (for user sharing) */}
             {newShare.type === 'user' && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  User Email
+                  Ethereum Address
+                  <span className="text-red-500 ml-1">*</span>
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   value={newShare.email}
                   onChange={(e) => setNewShare(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="user@example.com"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    newShare.email && !ethers.isAddress(newShare.email) 
+                      ? 'border-red-300 bg-red-50' 
+                      : 'border-gray-300'
+                  }`}
+                  placeholder="0x742d35Cc6634C0532925a3b8D4C9db96590645d4"
                 />
+                {newShare.email && !ethers.isAddress(newShare.email) && (
+                  <p className="text-sm text-red-600 mt-1">
+                    Please enter a valid Ethereum address
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter the Ethereum wallet address of the user you want to share with
+                </p>
               </div>
             )}
 
@@ -381,11 +592,36 @@ const FileSharingInterface = ({ file, onClose }) => {
             {/* Create Share Button */}
             <button
               onClick={newShare.type === 'link' ? generateShareLink : shareWithUser}
-              disabled={loading || (newShare.type === 'user' && !newShare.email)}
+              disabled={
+                loading || 
+                (newShare.type === 'user' && (!newShare.email || !ethers.isAddress(newShare.email))) ||
+                (newShare.type === 'user' && !walletConnected)
+              }
               className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title={
+                newShare.type === 'user' && !walletConnected 
+                  ? 'Connect wallet to share with users on blockchain'
+                  : newShare.type === 'user' && !ethers.isAddress(newShare.email)
+                  ? 'Enter a valid Ethereum address'
+                  : ''
+              }
             >
-              {loading ? 'Creating...' : `Create ${newShare.type === 'link' ? 'Share Link' : 'User Permission'}`}
+              {loading ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Processing...</span>
+                </div>
+              ) : (
+                `Create ${newShare.type === 'link' ? 'Share Link' : 'Blockchain Permission'}`
+              )}
             </button>
+            
+            {newShare.type === 'user' && !walletConnected && (
+              <p className="text-sm text-amber-600 mt-2 flex items-center">
+                <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+                Blockchain sharing requires wallet connection
+              </p>
+            )}
           </div>
 
           {/* Existing Share Links */}
@@ -482,8 +718,10 @@ const FileSharingInterface = ({ file, onClose }) => {
                         </div>
                       </div>
                       <button
-                        onClick={() => revokePermission(permission.id)}
+                        onClick={() => revokePermission(permission.id, permission.userAddress || permission.userEmail)}
                         className="text-red-600 hover:text-red-800 transition-colors"
+                        disabled={!walletConnected}
+                        title={!walletConnected ? 'Connect wallet to revoke access' : 'Revoke access'}
                       >
                         <TrashIcon className="w-4 h-4" />
                       </button>

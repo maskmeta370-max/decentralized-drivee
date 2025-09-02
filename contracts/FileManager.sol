@@ -2,16 +2,15 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title DecentralizedStorageManager
  * @dev Comprehensive smart contract for decentralized file storage with incentives
  */
 contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
-    using SafeMath for uint256;
 
     // Storage provider structure
     struct StorageProvider {
@@ -92,7 +91,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
     event FileAccessed(string indexed fileId, address indexed user);
     event ProviderSlashed(address indexed provider, uint256 amount, string reason);
 
-    constructor(address _storageToken) {
+    constructor(address _storageToken) Ownable(msg.sender) {
         storageToken = IERC20(_storageToken);
         incentivePool = IncentivePool({
             totalRewards: 0,
@@ -201,7 +200,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
             
             bytes32 contractId = keccak256(abi.encodePacked(_fileId, provider, block.timestamp));
             uint256 duration = 365; // 1 year default
-            uint256 pricePerDay = providerData.pricePerGB.mul(fileMetadata[_fileId].fileSize).div(10**9); // Convert to per day
+            uint256 pricePerDay = (providerData.pricePerGB * fileMetadata[_fileId].fileSize) / 10**9; // Convert to per day
             
             storageContracts[contractId] = StorageContract({
                 fileId: _fileId,
@@ -212,12 +211,12 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
                 startTime: block.timestamp,
                 endTime: block.timestamp + (duration * 1 days),
                 isActive: true,
-                collateral: pricePerDay.mul(30), // 30 days collateral
+                collateral: pricePerDay * 30, // 30 days collateral
                 lastProofTime: block.timestamp
             });
 
             // Update provider's used storage
-            providerData.usedStorage = providerData.usedStorage.add(fileMetadata[_fileId].fileSize);
+            providerData.usedStorage = providerData.usedStorage + fileMetadata[_fileId].fileSize;
             fileMetadata[_fileId].storageProviders.push(provider);
 
             emit StorageContractCreated(contractId, _fileId, provider, msg.sender);
@@ -242,7 +241,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
             StorageProvider storage providerData = storageProviders[provider];
             
             if (providerData.isActive && 
-                providerData.totalStorage.sub(providerData.usedStorage) >= _fileSize) {
+                providerData.totalStorage - providerData.usedStorage >= _fileSize) {
                 availableProviders[availableCount] = provider;
                 availableCount++;
             }
@@ -288,7 +287,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
             // Update reputation
             StorageProvider storage provider = storageProviders[msg.sender];
             if (provider.reputation < MAX_REPUTATION) {
-                provider.reputation = provider.reputation.add(1);
+                provider.reputation = provider.reputation + 1;
             }
             
             storageContract.lastProofTime = block.timestamp;
@@ -322,10 +321,10 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
      * @param _amount Reward amount
      */
     function _rewardProvider(address _provider, uint256 _amount) internal {
-        require(incentivePool.totalRewards >= incentivePool.distributedRewards.add(_amount), "Insufficient reward pool");
+        require(incentivePool.totalRewards >= incentivePool.distributedRewards + _amount, "Insufficient reward pool");
         
-        providerEarnings[_provider] = providerEarnings[_provider].add(_amount);
-        incentivePool.distributedRewards = incentivePool.distributedRewards.add(_amount);
+        providerEarnings[_provider] = providerEarnings[_provider] + _amount;
+        incentivePool.distributedRewards = incentivePool.distributedRewards + _amount;
         
         emit RewardDistributed(_provider, _amount);
     }
@@ -339,20 +338,20 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
         StorageProvider storage provider = storageProviders[_provider];
         
         if (provider.stakedAmount >= _amount) {
-            provider.stakedAmount = provider.stakedAmount.sub(_amount);
+            provider.stakedAmount = provider.stakedAmount - _amount;
         } else {
             provider.stakedAmount = 0;
         }
         
         // Decrease reputation
         if (provider.reputation >= 10) {
-            provider.reputation = provider.reputation.sub(10);
+            provider.reputation = provider.reputation >= 10 ? provider.reputation - 10 : 0;
         } else {
             provider.reputation = 0;
         }
         
         // Add to incentive pool
-        incentivePool.totalRewards = incentivePool.totalRewards.add(_amount);
+        incentivePool.totalRewards = incentivePool.totalRewards + _amount;
         
         emit PenaltyApplied(_provider, _amount);
     }
@@ -370,7 +369,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
         );
 
         file.lastAccessTimestamp = block.timestamp;
-        file.accessCount = file.accessCount.add(1);
+        file.accessCount = file.accessCount + 1;
         
         emit FileAccessed(_fileId, msg.sender);
     }
@@ -420,7 +419,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
             "Transfer failed"
         );
         
-        incentivePool.totalRewards = incentivePool.totalRewards.add(_amount);
+        incentivePool.totalRewards = incentivePool.totalRewards + _amount;
     }
 
     /**
@@ -434,7 +433,7 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
         require(provider.isActive, "Provider is not active");
         
         if (provider.stakedAmount >= _amount) {
-            provider.stakedAmount = provider.stakedAmount.sub(_amount);
+            provider.stakedAmount = provider.stakedAmount - _amount;
         } else {
             provider.stakedAmount = 0;
         }
@@ -450,7 +449,13 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
     /**
      * @dev Get file information
      * @param _fileId File identifier
-     * @return File metadata (partial due to mapping limitations)
+     * @return fileId The file identifier
+     * @return contentHash The content hash of the file
+     * @return owner The owner address
+     * @return fileSize The size of the file
+     * @return uploadTimestamp When the file was uploaded
+     * @return isPublic Whether the file is public
+     * @return accessCount Number of times accessed
      */
     function getFileInfo(string memory _fileId) external view returns (
         string memory fileId,
@@ -476,7 +481,12 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
     /**
      * @dev Get provider information
      * @param _provider Provider address
-     * @return Provider data
+     * @return totalStorage Total storage capacity
+     * @return usedStorage Currently used storage
+     * @return reputation Provider reputation score
+     * @return pricePerGB Price per GB in tokens
+     * @return isActive Whether provider is active
+     * @return stakedAmount Amount of tokens staked
      */
     function getProviderInfo(address _provider) external view returns (
         uint256 totalStorage,
@@ -515,7 +525,10 @@ contract DecentralizedStorageManager is Ownable, ReentrancyGuard {
 
     /**
      * @dev Get incentive pool information
-     * @return Incentive pool data
+     * @return totalRewards Total rewards in the pool
+     * @return distributedRewards Amount of rewards distributed
+     * @return rewardRate Current reward rate
+     * @return penaltyRate Current penalty rate
      */
     function getIncentivePoolInfo() external view returns (
         uint256 totalRewards,

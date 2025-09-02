@@ -4,8 +4,8 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title StorageToken (STOR)
@@ -18,7 +18,6 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  * - Governance voting power
  */
 contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
-    using SafeMath for uint256;
 
     // Token configuration
     uint256 public constant MAX_SUPPLY = 1000000000 * 10**18; // 1 billion tokens
@@ -53,7 +52,7 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
     event StakingRewardRateUpdated(uint256 newRate);
     event VotingPowerUpdated(address indexed user, uint256 newPower);
 
-    constructor() ERC20("StorageToken", "STOR") {
+    constructor() ERC20("StorageToken", "STOR") Ownable(msg.sender) {
         _mint(msg.sender, INITIAL_SUPPLY);
         authorizedMinters[msg.sender] = true;
     }
@@ -65,7 +64,7 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
      */
     function mint(address to, uint256 amount) external {
         require(authorizedMinters[msg.sender], "Not authorized to mint");
-        require(totalSupply().add(amount) <= MAX_SUPPLY, "Exceeds maximum supply");
+        require(totalSupply() + amount <= MAX_SUPPLY, "Exceeds maximum supply");
         
         _mint(to, amount);
     }
@@ -107,12 +106,12 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         
         // Update staking info
         StakingInfo storage userStaking = stakingInfo[msg.sender];
-        userStaking.stakedAmount = userStaking.stakedAmount.add(amount);
+        userStaking.stakedAmount = userStaking.stakedAmount + amount;
         userStaking.stakingTimestamp = block.timestamp;
         userStaking.lastRewardClaim = block.timestamp;
         
         // Update total staked
-        totalStaked = totalStaked.add(amount);
+        totalStaked = totalStaked + amount;
         
         // Update voting power
         _updateVotingPower(msg.sender, userStaking.stakedAmount);
@@ -128,7 +127,7 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         StakingInfo storage userStaking = stakingInfo[msg.sender];
         require(userStaking.stakedAmount >= amount, "Insufficient staked amount");
         require(
-            block.timestamp >= userStaking.stakingTimestamp.add(minimumStakingPeriod),
+            block.timestamp >= userStaking.stakingTimestamp + minimumStakingPeriod,
             "Minimum staking period not met"
         );
         
@@ -136,8 +135,8 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         _claimRewards(msg.sender);
         
         // Update staking info
-        userStaking.stakedAmount = userStaking.stakedAmount.sub(amount);
-        totalStaked = totalStaked.sub(amount);
+        userStaking.stakedAmount = userStaking.stakedAmount - amount;
+        totalStaked = totalStaked - amount;
         
         // Update voting power
         _updateVotingPower(msg.sender, userStaking.stakedAmount);
@@ -165,11 +164,11 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         
         uint256 rewards = calculateRewards(user);
         if (rewards > 0) {
-            userStaking.accumulatedRewards = userStaking.accumulatedRewards.add(rewards);
+            userStaking.accumulatedRewards = userStaking.accumulatedRewards + rewards;
             userStaking.lastRewardClaim = block.timestamp;
             
             // Mint rewards if within max supply
-            if (totalSupply().add(rewards) <= MAX_SUPPLY) {
+            if (totalSupply() + rewards <= MAX_SUPPLY) {
                 _mint(user, rewards);
                 emit RewardsClaimed(user, rewards);
             }
@@ -187,9 +186,9 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
             return 0;
         }
         
-        uint256 stakingDuration = block.timestamp.sub(userStaking.lastRewardClaim);
-        uint256 annualReward = userStaking.stakedAmount.mul(stakingRewardRate).div(100);
-        uint256 rewards = annualReward.mul(stakingDuration).div(SECONDS_PER_YEAR);
+        uint256 stakingDuration = block.timestamp - userStaking.lastRewardClaim;
+        uint256 annualReward = userStaking.stakedAmount * stakingRewardRate / 100;
+        uint256 rewards = annualReward * stakingDuration / SECONDS_PER_YEAR;
         
         return rewards;
     }
@@ -204,7 +203,7 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         uint256 newVotingPower = stakedAmount; // 1:1 ratio for simplicity
         
         votingPower[user] = newVotingPower;
-        totalVotingPower = totalVotingPower.sub(oldVotingPower).add(newVotingPower);
+        totalVotingPower = totalVotingPower - oldVotingPower + newVotingPower;
         
         emit VotingPowerUpdated(user, newVotingPower);
     }
@@ -245,7 +244,11 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
     /**
      * @dev Get staking information for a user
      * @param user User address
-     * @return Staking details
+     * @return stakedAmount The amount of tokens staked
+     * @return stakingTimestamp When the staking started
+     * @return lastRewardClaim Last reward claim timestamp
+     * @return accumulatedRewards Total accumulated rewards
+     * @return pendingRewards Current pending rewards
      */
     function getStakingInfo(address user) external view returns (
         uint256 stakedAmount,
@@ -266,7 +269,9 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
 
     /**
      * @dev Get total staking statistics
-     * @return Total staked amount and number of stakers
+     * @return totalStakedAmount Total amount of tokens staked
+     * @return totalVotingPowerAmount Total voting power
+     * @return currentRewardRate Current staking reward rate
      */
     function getStakingStats() external view returns (
         uint256 totalStakedAmount,
@@ -280,16 +285,7 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         );
     }
 
-    /**
-     * @dev Override transfer to handle paused state
-     */
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override whenNotPaused {
-        super._beforeTokenTransfer(from, to, amount);
-    }
+
 
     /**
      * @dev Emergency withdrawal function (only owner)
@@ -316,7 +312,7 @@ contract StorageToken is ERC20, ERC20Burnable, Ownable, Pausable {
         
         if (msg.sender != owner()) {
             uint256 currentAllowance = allowance(from, msg.sender);
-            _approve(from, msg.sender, currentAllowance.sub(amount));
+            _approve(from, msg.sender, currentAllowance - amount);
         }
         
         _burn(from, amount);

@@ -50,7 +50,8 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
     totalEarnings: '1,234.56 STOR',
     accessLogs: 5847,
     replicationFactor: 3.2,
-    networkLatency: '45ms'
+    networkLatency: '45ms',
+    networkActivity: [120, 180, 240, 320, 280, 380, 420, 360, 480, 520, 460, 580]
   });
 
   const [uploadHistory, setUploadHistory] = useState([
@@ -475,15 +476,15 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.1" />
                  </linearGradient>
                </defs>
-               {chartData.monthlyData.map((data, index) => {
+               {analyticsData.monthlyData.map((data, index) => {
                  const x = (index * 60) + 40;
-                 const height = (data.earnings / 500) * 150;
+                 const height = (data.uploads / 25) * 150;
                  const y = 180 - height;
                  return (
                    <g key={index}>
                      <rect x={x - 15} y={y} width="30" height={height} fill="url(#earningsGradient)" rx="2" />
                      <text x={x} y="195" textAnchor="middle" className="text-xs fill-gray-600">{data.month}</text>
-                     <text x={x} y={y - 5} textAnchor="middle" className="text-xs fill-gray-800">{data.earnings}</text>
+                     <text x={x} y={y - 5} textAnchor="middle" className="text-xs fill-gray-800">{data.uploads}</text>
                    </g>
                  );
                })}
@@ -502,11 +503,11 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
                    <stop offset="100%" stopColor="#10B981" stopOpacity="0.1" />
                  </linearGradient>
                </defs>
-               {chartData.networkActivity.slice(0, 12).map((activity, index) => {
-                 const x1 = (index * 30) + 40;
-                 const x2 = ((index + 1) * 30) + 40;
-                 const y1 = 180 - (activity / 600) * 150;
-                 const y2 = index < 11 ? 180 - (chartData.networkActivity[index + 1] / 600) * 150 : y1;
+               {analyticsData.networkActivity.slice(0, 12).map((activity, index) => {
+                  const x1 = (index * 30) + 40;
+                  const y1 = 180 - (activity / 600) * 150;
+                  const x2 = ((index + 1) * 30) + 40;
+                  const y2 = index < 11 ? 180 - (analyticsData.networkActivity[index + 1] / 600) * 150 : y1;
                  return (
                    <g key={index}>
                      {index < 11 && (
@@ -530,7 +531,7 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
            <div className="flex items-center justify-between">
              <div>
                <h4 className="text-sm font-medium text-gray-500">Total Earnings</h4>
-               <p className="text-2xl font-bold text-gray-900">{analytics.totalEarnings}</p>
+               <p className="text-2xl font-bold text-gray-900">{analyticsData.totalEarnings}</p>
              </div>
              <CurrencyDollarIcon className="w-8 h-8 text-blue-500" />
            </div>
@@ -546,7 +547,7 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
            <div className="flex items-center justify-between">
              <div>
                <h4 className="text-sm font-medium text-gray-500">Access Events</h4>
-               <p className="text-2xl font-bold text-gray-900">{analytics.accessLogs}</p>
+               <p className="text-2xl font-bold text-gray-900">{analyticsData.accessLogs}</p>
              </div>
              <EyeIcon className="w-8 h-8 text-purple-500" />
            </div>
@@ -562,7 +563,7 @@ const AnalyticsDashboard = ({ files = [], stats = {} }) => {
            <div className="flex items-center justify-between">
              <div>
                <h4 className="text-sm font-medium text-gray-500">Network Latency</h4>
-               <p className="text-2xl font-bold text-gray-900">{analytics.networkLatency}</p>
+               <p className="text-2xl font-bold text-gray-900">{analyticsData.networkLatency}</p>
              </div>
              <GlobeAltIcon className="w-8 h-8 text-green-500" />
            </div>

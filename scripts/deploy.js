@@ -1,7 +1,7 @@
 async function main() {
   try {
     // Get the contract factory
-    const FileManager = await hre.ethers.getContractFactory("FileManager");
+    const FileManager = await ethers.getContractFactory("DecentralizedStorageManager");
 
     // Start the deployment with explicit gas settings
     console.log("Deploying FileManager contract...");
@@ -11,7 +11,9 @@ async function main() {
     };
 
     console.log("Deployment options:", deploymentOptions);
-    const fileManager = await FileManager.deploy(deploymentOptions);
+    // For testing, use zero address as storage token (can be updated later)
+    const storageTokenAddress = "0x0000000000000000000000000000000000000000";
+    const fileManager = await FileManager.deploy(storageTokenAddress, deploymentOptions);
 
     // Wait for the deployment to be confirmed
     console.log("Waiting for deployment confirmation...");
