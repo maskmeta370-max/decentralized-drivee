@@ -11,8 +11,10 @@ import {
   InformationCircleIcon,
   PlusIcon
 } from '@heroicons/react/24/outline';
+import { encryptFile } from '../utils/autoEncryption';
+import { useErrorHandler, safeAsync, ERROR_TYPES } from '../utils/errorHandler';
 
-const UploadCenter = ({ onUpload, isUploading = false }) => {
+const UploadCenter = ({ onUpload, isUploading = false, account }) => {
   const [files, setFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
@@ -25,7 +27,9 @@ const UploadCenter = ({ onUpload, isUploading = false }) => {
     isPublic: false
   });
   const [currentTag, setCurrentTag] = useState('');
+  const [errorMessages, setErrorMessages] = useState({});
   const fileInputRef = useRef(null);
+  const { error, isLoading, handleAsync, clearError } = useErrorHandler();
 
   const categories = [
     { value: 'general', label: 'General' },
@@ -110,46 +114,179 @@ const UploadCenter = ({ onUpload, isUploading = false }) => {
   };
 
   const handleUpload = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      setErrorMessages({ general: 'Please select files to upload.' });
+      return;
+    }
     
-    // Update all files to use global metadata
-    const updatedFiles = files.map(f => ({
-      ...f,
-      metadata: {
-        ...f.metadata,
-        description: f.metadata.description || globalMetadata.description,
-        tags: [...new Set([...f.metadata.tags, ...globalMetadata.tags])],
-        category: f.metadata.category || globalMetadata.category,
-        isPublic: f.metadata.isPublic
-      }
-    }));
+    if (!account) {
+      setErrorMessages({ general: 'Please connect your wallet to upload files.' });
+      return;
+    }
     
-    setFiles(updatedFiles);
+    clearError();
+    setErrorMessages({});
     
-    // Simulate upload process
-    for (const file of updatedFiles) {
-      setFiles(prev => prev.map(f => 
-        f.id === file.id ? { ...f, status: 'uploading' } : f
-      ));
+    await handleAsync(async () => {
+      // Update all files to use global metadata
+      const updatedFiles = files.map(f => ({
+        ...f,
+        metadata: {
+          ...f.metadata,
+          description: f.metadata.description || globalMetadata.description,
+          tags: [...new Set([...f.metadata.tags, ...globalMetadata.tags])],
+          category: f.metadata.category || globalMetadata.category,
+          isPublic: f.metadata.isPublic
+        }
+      }));
       
-      // Simulate progress
-      for (let progress = 0; progress <= 100; progress += 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        setUploadProgress(prev => ({ ...prev, [file.id]: progress }));
+      setFiles(updatedFiles);
+      
+      // Process files with auto-encryption
+      const processedFiles = [];
+      const failedFiles = [];
+      
+      for (const file of updatedFiles) {
         setFiles(prev => prev.map(f => 
-          f.id === file.id ? { ...f, progress } : f
+          f.id === file.id ? { ...f, status: 'uploading' } : f
         ));
+        
+        try {
+          // Validate file size (100MB limit)
+          if (file.size > 100 * 1024 * 1024) {
+            throw new Error(`File ${file.name} exceeds 100MB size limit`);
+          }
+          
+          // Read file content with timeout
+          const fileContent = await safeAsync(async () => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              const timeout = setTimeout(() => {
+                reject(new Error('File reading timeout'));
+              }, 30000); // 30 second timeout
+              
+              reader.onload = (e) => {
+                clearTimeout(timeout);
+                resolve(e.target.result);
+              };
+              reader.onerror = (e) => {
+                clearTimeout(timeout);
+                reject(new Error('Failed to read file'));
+              };
+              reader.readAsText(file.file);
+            });
+          }, {
+            context: { operation: 'file_reading', fileName: file.name },
+            operationId: `read_${file.id}`,
+            retry: true,
+            retryOptions: { maxRetries: 2, delay: 1000 }
+          });
+          
+          // Generate unique file ID
+          const fileId = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          
+          // Auto-encrypt the file if encryption is enabled
+          let finalContent = fileContent;
+          let encryptionResult = null;
+          
+          if (encryptionEnabled) {
+            setUploadProgress(prev => ({ ...prev, [file.id]: 25 }));
+            setFiles(prev => prev.map(f => 
+              f.id === file.id ? { ...f, progress: 25 } : f
+            ));
+            
+            encryptionResult = await safeAsync(async () => {
+              return await encryptFile(fileContent, fileId, account);
+            }, {
+              context: { operation: 'encryption', fileName: file.name },
+              operationId: `encrypt_${file.id}`,
+              retry: true,
+              retryOptions: { maxRetries: 2, delay: 500 }
+            });
+            
+            if (encryptionResult.success) {
+              finalContent = encryptionResult.encryptedContent;
+            } else {
+              throw new Error(`Encryption failed: ${encryptionResult.error}`);
+            }
+          }
+          
+          // Simulate upload progress with error handling
+          for (let progress = 50; progress <= 100; progress += 10) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            setUploadProgress(prev => ({ ...prev, [file.id]: progress }));
+            setFiles(prev => prev.map(f => 
+              f.id === file.id ? { ...f, progress } : f
+            ));
+          }
+          
+          // Add encryption metadata to file
+          const processedFile = {
+            ...file,
+            fileId,
+            content: finalContent,
+            isEncrypted: encryptionEnabled,
+            encryptionMetadata: encryptionResult?.metadata || null,
+            status: 'completed'
+          };
+          
+          processedFiles.push(processedFile);
+          
+          setFiles(prev => prev.map(f => 
+            f.id === file.id ? { ...f, status: 'completed' } : f
+          ));
+          
+        } catch (error) {
+          console.error(`Error processing file ${file.name}:`, error);
+          failedFiles.push({ file, error: error.message });
+          
+          setFiles(prev => prev.map(f => 
+            f.id === file.id ? { ...f, status: 'error' } : f
+          ));
+          
+          setErrorMessages(prev => ({
+            ...prev,
+            [file.id]: error.userMessage || error.message
+          }));
+        }
       }
       
-      setFiles(prev => prev.map(f => 
-        f.id === file.id ? { ...f, status: 'completed' } : f
-      ));
-    }
-    
-    // Call parent upload handler
-    if (onUpload) {
-      onUpload(updatedFiles, { encryptionEnabled, encryptionPassword });
-    }
+      // Show summary of results
+      if (failedFiles.length > 0) {
+        const failedNames = failedFiles.map(f => f.file.name).join(', ');
+        setErrorMessages(prev => ({
+          ...prev,
+          general: `Failed to process ${failedFiles.length} file(s): ${failedNames}`
+        }));
+      }
+      
+      // Call parent upload handler with processed files
+      if (onUpload && processedFiles.length > 0) {
+        await safeAsync(async () => {
+          await onUpload(processedFiles, { 
+            encryptionEnabled, 
+            encryptionPassword,
+            autoEncryption: true,
+            account 
+          });
+        }, {
+          context: { operation: 'upload_to_blockchain', fileCount: processedFiles.length },
+          operationId: 'blockchain_upload',
+          retry: true,
+          retryOptions: { maxRetries: 3, delay: 2000 }
+        });
+      }
+      
+      return { processed: processedFiles.length, failed: failedFiles.length };
+    }, {
+      context: { operation: 'file_upload', fileCount: files.length },
+      onError: (error) => {
+        setErrorMessages(prev => ({
+          ...prev,
+          general: error.userMessage || 'Upload failed. Please try again.'
+        }));
+      }
+    });
   };
 
   const formatFileSize = (bytes) => {
@@ -387,6 +524,30 @@ const UploadCenter = ({ onUpload, isUploading = false }) => {
               </div>
             </div>
           </div>
+
+          {/* Error Messages */}
+          {Object.keys(errorMessages).length > 0 && (
+            <div className="space-y-2">
+              {errorMessages.general && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    {errorMessages.general}
+                  </div>
+                </div>
+              )}
+              {Object.entries(errorMessages).filter(([key]) => key !== 'general').map(([fileId, message]) => {
+                const file = files.find(f => f.id === fileId);
+                return (
+                  <div key={fileId} className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+                    <strong>{file?.name || 'Unknown file'}:</strong> {message}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Upload Button */}
           <div className="flex justify-end space-x-3">

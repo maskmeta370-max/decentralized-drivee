@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { ethers, BrowserProvider } from 'ethers';
 import FileManagerABI from '../contracts/FileManager.json';
 
-const CONTRACT_ADDRESS = '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 
 export const useWallet = () => {
   const [account, setAccount] = useState(null);

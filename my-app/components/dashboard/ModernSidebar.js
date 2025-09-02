@@ -10,6 +10,7 @@ const ModernSidebar = ({ activeSection, setActiveSection, account, disconnectWal
     { id: 'dashboard', label: 'Dashboard', icon: '🏠', description: 'Overview & stats' },
     { id: 'vault', label: 'My Vault', icon: '🗃️', description: 'File management' },
     { id: 'upload', label: 'Upload Center', icon: '⬆️', description: 'Add new files' },
+    { id: 'ai-chat', label: 'AI File Chat', icon: '🤖', description: 'Chat with your files' },
     { id: 'analytics', label: 'Analytics', icon: '📈', description: 'Usage insights' },
     { id: 'settings', label: 'Settings', icon: '⚙️', description: 'Account settings' },
   ];
